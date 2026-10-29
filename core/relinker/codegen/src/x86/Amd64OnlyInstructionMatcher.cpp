@@ -1,4 +1,5 @@
 #include <codegen/x86/IAmd64OnlyInstructionMatcher.hpp>
+#include <codegen/x86/BitPermutationLowering.hpp>
 #include <codegen/x86/DecodedInstruction.hpp>
 #include <codegen/x86/Amd64OnlySubstitutionTable.hpp>
 #include <codegen/x86/Sse4aLowering.hpp>
@@ -17,7 +18,6 @@
 #include <codegen/x86/WideStoreOperands.hpp>
 #include <codegen/x86/MaskedStoreLowering.hpp>
 #include <codegen/x86/AndnLowering.hpp>
-#include <codegen/x86/BitPermutationLowering.hpp>
 #include <codegen/x86/X64InstructionDecoder.hpp>
 #include <codegen/x86/X64OpcodeConstants.hpp>
 #include <codegen/CodegenException.hpp>
@@ -256,8 +256,6 @@ std::optional<Amd64OnlyMatch> Amd64OnlyInstructionMatcher::_matchRosetta(const D
         return std::nullopt;
     if (const auto andn = DecodeAndn(instr.Data, instr.Length))
         return _trampoline("ANDN", instr.Length, _outOfLine(instr.Length, trailing, [&](StubBodyBuilder& body) { EmitAndn(body, *andn); }));
-    if (const auto bits = DecodeBitPermutation(instr.Data, instr.Length))
-        return _trampoline(bits->Deposit ? "PDEP" : "PEXT", instr.Length, _outOfLine(instr.Length, trailing, [&](StubBodyBuilder& body) { EmitBitPermutation(body, *bits); }));
     if (instr.IsRdseed()) {
         std::vector<std::uint8_t> replacement(instr.Data, instr.Data + instr.Length);
         replacement[instr.OpcodeOffset() + 2] &= static_cast<std::uint8_t>(~(1u << X64OpcodeConstants::ModRmRegShift));
@@ -265,6 +263,8 @@ std::optional<Amd64OnlyMatch> Amd64OnlyInstructionMatcher::_matchRosetta(const D
     }
     if (instr.IsClwb())
         return _inPlace(kClwb, instr.Length, {});
+    if (const auto bits = DecodeBitPermutation(instr.Data, instr.Length))
+        return _trampoline(bits->Deposit ? "PDEP" : "PEXT", instr.Length, _outOfLine(instr.Length, trailing, [&](StubBodyBuilder& body) { EmitBitPermutation(body, *bits); }));
     if (instr.IsXsaveopt()) {
         std::vector<std::uint8_t> replacement(instr.Data, instr.Data + instr.Length);
         replacement[instr.OpcodeOffset() + 2] &= static_cast<std::uint8_t>(~(2u << X64OpcodeConstants::ModRmRegShift));
@@ -313,6 +313,10 @@ const char* Amd64OnlyInstructionMatcher::_emitOutOfLine(StubBodyBuilder& body, c
         _emitRdpru(body);
         return kRdpru.Name;
     }
+    if (const auto bits = _target == Amd64OnlyTarget::Rosetta ? DecodeBitPermutation(instr.Data, instr.Length) : std::nullopt) {
+        EmitBitPermutation(body, *bits);
+        return bits->Deposit ? "PDEP" : "PEXT";
+    }
     if (instr.IsMcommit()) {
         if (!_validWait(instr))
             return nullptr;
@@ -326,10 +330,6 @@ const char* Amd64OnlyInstructionMatcher::_emitOutOfLine(StubBodyBuilder& body, c
     if (const auto andn = _target == Amd64OnlyTarget::Rosetta ? DecodeAndn(instr.Data, instr.Length) : std::nullopt) {
         EmitAndn(body, *andn);
         return "ANDN";
-    }
-    if (const auto bits = _target == Amd64OnlyTarget::Rosetta ? DecodeBitPermutation(instr.Data, instr.Length) : std::nullopt) {
-        EmitBitPermutation(body, *bits);
-        return bits->Deposit ? "PDEP" : "PEXT";
     }
     if (_target == Amd64OnlyTarget::Rosetta && instr.IsRdtscp()) {
         body.Raw(_rdtscpReplacement(instr));
