@@ -16,6 +16,7 @@ struct BitPermutationOperands {
 };
 
 [[nodiscard]] std::optional<BitPermutationOperands> DecodeBitPermutation(const std::uint8_t* data, std::size_t length);
+[[nodiscard]] bool CanLowerBitPermutation(const BitPermutationOperands& operands);
 void EmitBitPermutation(StubBodyBuilder& body, const BitPermutationOperands& operands);
 
 }

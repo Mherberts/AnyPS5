@@ -66,6 +66,8 @@ void decoding() {
                 Codegen::StubBodyBuilder builder;
                 Codegen::EmitBitPermutation(builder, *Codegen::DecodeBitPermutation(site.data(), site.size()));
             } catch (const Codegen::CodegenException&) { rejected = true; }
+            const auto operands = *Codegen::DecodeBitPermutation(site.data(), site.size());
+            require(Codegen::CanLowerBitPermutation(operands) != rejected, "Matcher eligibility disagrees with spill bounds");
             require(rejected == (wide ? rejects64 : rejects32), "Spill overlap detection has an incorrect boundary");
         }
         const Bytes overflow{0xC4, 0xE2, static_cast<std::uint8_t>((wide ? 0xF0 : 0x70) | (deposit ? 3 : 2)), 0xF5, 0x84, 0x24, 0xFF, 0xFF, 0xFF, 0x7F};
@@ -92,15 +94,18 @@ void rejectedMemory() {
                 Codegen::EmitBitPermutation(builder, *Codegen::DecodeBitPermutation(site.data(), site.size()));
             } catch (const Codegen::CodegenException&) { rejected = true; }
             require(rejected, "A dynamic memory mask could alias the spill frame");
+            const auto matcher = Codegen::MakeAmd64OnlyInstructionMatcher(Codegen::Amd64OnlyTarget::Rosetta, true);
+            require(!matcher->Match(site.data(), site.size()), "Unsupported memory mask was not left native");
         }
 }
 
 void matching() {
     const auto intel = Codegen::MakeAmd64OnlyInstructionMatcher();
-    const auto rosetta = Codegen::MakeAmd64OnlyInstructionMatcher(Codegen::Amd64OnlyTarget::Rosetta);
+    const auto rosetta = Codegen::MakeAmd64OnlyInstructionMatcher(Codegen::Amd64OnlyTarget::Rosetta, true);
     for (const bool deposit : {false, true}) {
         const auto site = instruction(deposit, true, 0, 1, 6);
         const auto name = deposit ? "PDEP" : "PEXT";
+        require(!Codegen::MakeAmd64OnlyInstructionMatcher(Codegen::Amd64OnlyTarget::Rosetta)->Match(site.data(), site.size()), "Default Rosetta mode rewrote PEXT/PDEP");
         require(!intel->Match(site.data(), site.size()), "Intel mode rewrote PEXT/PDEP");
         const auto match = rosetta->Match(site.data(), site.size());
         require(match && match->InstructionName == name && match->Lowering == Codegen::Amd64OnlyLowering::Trampoline && !match->Optional, "Rosetta mode did not require a PEXT/PDEP trampoline");
@@ -109,7 +114,7 @@ void matching() {
         Bytes file(0x300, 0xCC);
         std::copy(site.begin(), site.end(), file.begin() + 0x200);
         const Domain::ProgramHeader segment{1, 5, 0x200, 0x1000, 0, site.size(), site.size(), 16};
-        const auto converted = Codegen::MakeAmd64OnlyConverter(Codegen::Amd64OnlyTarget::Rosetta)->Convert(file, {segment});
+        const auto converted = Codegen::MakeAmd64OnlyConverter(Codegen::Amd64OnlyTarget::Rosetta, {}, true)->Convert(file, {segment});
         require(converted.Trampolines.size() == 1 && converted.Reports.size() == 1 && converted.Reports[0].InstructionName == name, "Converter did not report a PEXT/PDEP trampoline");
         require(converted.Trampolines[0].Offset == 0x200 && converted.Trampolines[0].Length == site.size() && converted.Bytes == file, "Converter changed the original PEXT/PDEP site");
     }

@@ -99,6 +99,17 @@ std::optional<BitPermutationOperands> DecodeBitPermutation(const std::uint8_t* d
     return operands;
 }
 
+bool CanLowerBitPermutation(const BitPermutationOperands& operands) {
+    if (!operands.Memory) return true;
+    const auto& memory = *operands.Memory;
+    if (!memory.StackBase || (memory.Sib & 0x38) != 0x20 || (memory.RexIndexBase & 2) != 0
+        || std::any_of(memory.Prefixes.begin(), memory.Prefixes.end(), [](const auto prefix) { return prefix == 0x64 || prefix == 0x65 || prefix == 0x67; }))
+        return false;
+    const auto displacement = static_cast<std::int64_t>(memory.Displacement);
+    return displacement + kFrameSize <= std::numeric_limits<std::int32_t>::max()
+        && !(displacement < 72 - kFrameSize && displacement + (operands.Wide ? 8 : 4) > -kFrameSize);
+}
+
 void EmitBitPermutation(StubBodyBuilder& body, const BitPermutationOperands& operands) {
     if (operands.Memory) {
         const auto& memory = *operands.Memory;
