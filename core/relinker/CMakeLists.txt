@@ -55,6 +55,7 @@ add_library(relinker_core STATIC
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/ScalarCompareOperands.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/MaskedStoreLowering.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/AndnLowering.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/BitPermutationLowering.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/relinker/src/parsing/ElfReader.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/relinker/src/parsing/RelrRelocations.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/relinker/src/analysis/SyscallScanner.cpp
@@ -96,6 +97,11 @@ if(WIN32)
 endif()
 
 if(BUILD_TESTING)
+    add_test_executable(bit_permutation_lowering_tests ${CMAKE_CURRENT_SOURCE_DIR}/codegen/tests/BitPermutationLoweringTests.cpp)
+    target_link_libraries(bit_permutation_lowering_tests PRIVATE relinker_core)
+    add_test(NAME bit_permutation_lowering COMMAND bit_permutation_lowering_tests)
+    set_tests_properties(bit_permutation_lowering PROPERTIES TIMEOUT 20)
+
     add_test_executable(andn_lowering_tests ${CMAKE_CURRENT_SOURCE_DIR}/codegen/tests/AndnLoweringTests.cpp)
     target_link_libraries(andn_lowering_tests PRIVATE relinker_core)
     add_test(NAME andn_lowering COMMAND andn_lowering_tests)
@@ -242,6 +248,7 @@ if(WIN32)
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/ScalarCompareOperands.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/MaskedStoreLowering.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/AndnLowering.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/BitPermutationLowering.cpp
     )
     target_include_directories(amd64_only_windows_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/include ${CMAKE_CURRENT_SOURCE_DIR}/domain/include ${CMAKE_CURRENT_SOURCE_DIR}/io/include ${CMAKE_CURRENT_SOURCE_DIR}/codegen/include ${CMAKE_CURRENT_SOURCE_DIR}/../libs/prx/libc/src/specifics/windows)
     if(BUILD_TESTING)
@@ -514,6 +521,7 @@ if(BUILD_TESTING)
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/ScalarCompareOperands.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/MaskedStoreLowering.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/AndnLowering.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/codegen/src/x86/BitPermutationLowering.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/src/linux/LinuxElfPatcher.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/src/general/SegmentFilter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/elfpatcher/src/general/EntryStubBuilder.cpp
@@ -916,6 +924,8 @@ if(BUILD_TESTING)
         set_tests_properties(guest_gnu_hash PROPERTIES TIMEOUT 20)
         add_test(NAME to_rosetta COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_to_rosetta.py $<TARGET_FILE:relinker>)
+        add_test(NAME bit_permutation_conversion COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_bit_permutation_conversion.py $<TARGET_FILE:relinker>)
         add_test(NAME syscall_number COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/relinker/tests/test_syscall_number.py $<TARGET_FILE:relinker>)
         add_test(NAME unused_filter_indirect COMMAND ${Python3_EXECUTABLE}
